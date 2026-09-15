@@ -42,18 +42,37 @@ rng = random.Random(1234)
 result = roll("2d20kh1", rng=rng)  # advantage roll
 ```
 
+Multiple dice groups can be combined in one expression, e.g. a damage
+roll with a bonus die:
+
+```python
+result = roll("3d6+2d4+2")
+print(result.groups[0].rolls)  # the 3d6, e.g. (4, 1, 6)
+print(result.groups[1].rolls)  # the 2d4, e.g. (2, 3)
+print(result.modifier)         # 2
+print(result.total)            # sum of every kept die plus the modifier
+```
+
+`parse()` returns a `Roll` for a single dice group (as above) and an
+`Expression` for multi-group notation; `roll()` accepts either, plus the
+original notation text, and returns a `RollResult` or `ExpressionResult`
+to match.
+
 ## Supported notation
 
 - `NdX` — roll N dice with X sides (`N` defaults to 1: `d20` == `1d20`)
 - `d%` — percentile die, equivalent to `d100`
 - `NdXkhK` / `NdXklK` — keep the highest/lowest K of the N dice rolled
 - a trailing `+M` or `-M` modifier, added after any keep filtering
+- multiple dice groups joined by `+`/`-`, e.g. `3d6+2d4`, each with its
+  own optional keep filter (`1d20kh1+2d4kl1`); a `-` before a group
+  subtracts that group's kept total rather than negating each die
 
 Invalid notation (empty strings, zero-sided dice, asking to keep more
-dice than were rolled, and so on) raises `dicenotation.ParseError`.
+dice than were rolled, a bare number with no dice group, and so on)
+raises `dicenotation.ParseError`.
 
 ## Status
 
-Early skeleton. Single dice groups only — no `3d6+2d4`, no exploding
-dice yet. See the test suite for the exact set of notation currently
-accepted and rejected.
+Early skeleton. No exploding dice yet. See the test suite for the exact
+set of notation currently accepted and rejected.

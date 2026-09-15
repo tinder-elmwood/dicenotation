@@ -1,6 +1,6 @@
 import unittest
 
-from dicenotation import Keep, ParseError, Roll, parse
+from dicenotation import Expression, Group, Keep, ParseError, Roll, parse
 
 
 class ParseValidTests(unittest.TestCase):
@@ -45,6 +45,11 @@ class ParseInvalidTests(unittest.TestCase):
         "3d6++2",
         "3d6+",
         "3 d 6",  # space between count and "d" is not tolerated
+        "5",  # a bare constant is not a dice expression
+        "5+3",  # arithmetic with no dice group at all
+        "3d6+2d4kh5",  # bad keep count in the second group
+        "3 d 6+2d4",
+        "3d6+2d",
     ]
 
     def test_parse_rejects(self):
@@ -52,6 +57,42 @@ class ParseInvalidTests(unittest.TestCase):
             with self.subTest(text=text):
                 with self.assertRaises(ParseError):
                     parse(text)
+
+
+class ParseMultiGroupTests(unittest.TestCase):
+    # (input text, expected Expression)
+    CASES = [
+        (
+            "3d6+2d4",
+            Expression(groups=(Group(1, 3, 6), Group(1, 2, 4))),
+        ),
+        (
+            "3d6-2d4",
+            Expression(groups=(Group(1, 3, 6), Group(-1, 2, 4))),
+        ),
+        (
+            "3d6+2d4+2",
+            Expression(groups=(Group(1, 3, 6), Group(1, 2, 4)), modifier=2),
+        ),
+        (
+            " 3d6 + 2d4 - 1 ",
+            Expression(groups=(Group(1, 3, 6), Group(1, 2, 4)), modifier=-1),
+        ),
+        (
+            "1d20kh1+2d4kl1",
+            Expression(
+                groups=(
+                    Group(1, 1, 20, Keep("highest", 1)),
+                    Group(1, 2, 4, Keep("lowest", 1)),
+                )
+            ),
+        ),
+    ]
+
+    def test_parse_multi_group(self):
+        for text, expected in self.CASES:
+            with self.subTest(text=text):
+                self.assertEqual(parse(text), expected)
 
 
 if __name__ == "__main__":

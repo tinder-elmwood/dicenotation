@@ -1,7 +1,7 @@
 import random
 import unittest
 
-from dicenotation import Keep, Roll, roll
+from dicenotation import Expression, Group, Keep, Roll, roll
 
 
 class _FixedRng:
@@ -61,6 +61,37 @@ class RollerTests(unittest.TestCase):
         spec = Roll(count=3, sides=6, keep=Keep("highest", 3))
         result = roll(spec, rng=rng)
         self.assertEqual(result.kept, result.rolls)
+
+
+class ExpressionRollerTests(unittest.TestCase):
+    def test_multi_group_totals_are_summed_across_groups(self):
+        # 3d6 rolls 4, 1, 6 (sum 11); 2d4 rolls 2, 3 (sum 5)
+        rng = _FixedRng([4, 1, 6, 2, 3])
+        result = roll("3d6+2d4", rng=rng)
+        self.assertEqual(len(result.groups), 2)
+        self.assertEqual(result.groups[0].rolls, (4, 1, 6))
+        self.assertEqual(result.groups[1].rolls, (2, 3))
+        self.assertEqual(result.total, 16)
+
+    def test_negative_group_is_subtracted(self):
+        # 3d6 rolls to 11, 2d4 rolls to 5, then a flat +1
+        rng = _FixedRng([4, 1, 6, 2, 3])
+        result = roll("3d6-2d4+1", rng=rng)
+        self.assertEqual(result.modifier, 1)
+        self.assertEqual(result.total, 11 - 5 + 1)
+
+    def test_keep_filtering_applies_per_group(self):
+        rng = _FixedRng([5, 1, 5, 2, 3, 4])
+        spec = Expression(
+            groups=(
+                Group(1, 4, 6, Keep("highest", 2)),
+                Group(1, 2, 4),
+            )
+        )
+        result = roll(spec, rng=rng)
+        self.assertEqual(result.groups[0].kept, (5, 5))
+        self.assertEqual(result.groups[1].kept, (3, 4))
+        self.assertEqual(result.total, 10 + 7)
 
 
 if __name__ == "__main__":

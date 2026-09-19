@@ -5,14 +5,17 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
 # count is optional (defaults to 1, as in "d20"). sides is digits or "%"
-# for d100. keep-highest/keep-lowest and the trailing modifier are both
-# optional. Whitespace is tolerated anywhere a human might type it.
+# for d100. The exploding marker "!", keep-highest/keep-lowest, and the
+# trailing modifier are all optional. Whitespace is tolerated anywhere a
+# human might type it.
 _PATTERN = re.compile(
     r"""
     ^\s*
     (?P<count>\d*)
     d
     (?P<sides>\d+|%)
+    \s*
+    (?P<explode>!)?
     \s*
     (?:(?P<keep_mode>k[hl])(?P<keep_count>\d+))?
     \s*
@@ -23,10 +26,10 @@ _PATTERN = re.compile(
 )
 
 # One signed term in a multi-group expression such as "3d6+2d4-1": either
-# a dice group (with its own optional keep-highest/keep-lowest) or a bare
-# constant. Whitespace is tolerated around the sign the same way _PATTERN
-# tolerates it around the trailing modifier, but not inside a token (so
-# "3 d 6" still fails, matching the single-group rules).
+# a dice group (with its own optional exploding marker and keep-highest/
+# keep-lowest) or a bare constant. Whitespace is tolerated around the sign
+# the same way _PATTERN tolerates it around the trailing modifier, but not
+# inside a token (so "3 d 6" still fails, matching the single-group rules).
 _TERM_PATTERN = re.compile(
     r"""
     \s*
@@ -36,6 +39,8 @@ _TERM_PATTERN = re.compile(
         (?P<count>\d*)
         d
         (?P<sides>\d+|%)
+        \s*
+        (?P<explode>!)?
         (?:\s*(?P<keep_mode>k[hl])(?P<keep_count>\d+))?
         |
         (?P<constant>\d+)
@@ -66,6 +71,7 @@ class Roll:
     sides: int
     modifier: int = 0
     keep: Optional[Keep] = None
+    explode: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,6 +84,7 @@ class Group:
     count: int
     sides: int
     keep: Optional[Keep] = None
+    explode: bool = False
 
 
 @dataclass(frozen=True)
@@ -93,8 +100,10 @@ def parse(text: str) -> Union[Roll, Expression]:
     Expression.
 
     Examples: "d20", "3d6", "3d6+2", "4d6kh3" (roll 4d6, keep the
-    highest 3), "d%" (percentile die, equivalent to d100), "3d6+2d4"
-    (multiple dice groups, returned as an Expression rather than a Roll).
+    highest 3), "d%" (percentile die, equivalent to d100), "4d6!" (each
+    die that rolls its max value is rolled again and the results added
+    together), "3d6+2d4" (multiple dice groups, returned as an
+    Expression rather than a Roll).
     """
     match = _PATTERN.match(text)
     if match:
@@ -111,12 +120,21 @@ def _build_roll(match: "re.Match") -> Roll:
     if sides < 1:
         raise ParseError("a die must have at least 1 side")
 
+    explode = _build_explode(match, sides)
     keep = _build_keep(match, count)
 
     modifier_text = match["modifier"]
     modifier = int(modifier_text.replace(" ", "")) if modifier_text else 0
 
-    return Roll(count=count, sides=sides, modifier=modifier, keep=keep)
+    return Roll(count=count, sides=sides, modifier=modifier, keep=keep, explode=explode)
+
+
+def _build_explode(match: "re.Match", sides: int) -> bool:
+    if not match["explode"]:
+        return False
+    if sides == 1:
+        raise ParseError("a d1 would explode forever, since every roll is the max")
+    return True
 
 
 def _build_keep(match: "re.Match", count: int) -> Optional[Keep]:
@@ -153,8 +171,11 @@ def _parse_expression(text: str) -> Expression:
             sides = 100 if match["sides"] == "%" else int(match["sides"])
             if sides < 1:
                 raise ParseError("a die must have at least 1 side")
+            explode = _build_explode(match, sides)
             keep = _build_keep(match, count)
-            groups.append(Group(sign=sign, count=count, sides=sides, keep=keep))
+            groups.append(
+                Group(sign=sign, count=count, sides=sides, keep=keep, explode=explode)
+            )
 
         term_count += 1
         pos = match.end()

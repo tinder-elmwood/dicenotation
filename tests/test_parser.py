@@ -19,6 +19,16 @@ class ParseValidTests(unittest.TestCase):
         ("4d6kl1", Roll(count=4, sides=6, keep=Keep("lowest", 1))),
         ("4D6KH3", Roll(count=4, sides=6, keep=Keep("highest", 3))),
         ("2d20kh1+5", Roll(count=2, sides=20, modifier=5, keep=Keep("highest", 1))),
+        ("d6!", Roll(count=1, sides=6, explode=True)),
+        ("4d6!", Roll(count=4, sides=6, explode=True)),
+        (
+            "4d6!kh3",
+            Roll(count=4, sides=6, keep=Keep("highest", 3), explode=True),
+        ),
+        (
+            "4d6! kh3 +1",
+            Roll(count=4, sides=6, modifier=1, keep=Keep("highest", 3), explode=True),
+        ),
     ]
 
     def test_parse(self):
@@ -50,6 +60,9 @@ class ParseInvalidTests(unittest.TestCase):
         "3d6+2d4kh5",  # bad keep count in the second group
         "3 d 6+2d4",
         "3d6+2d",
+        "d1!",  # a one-sided die would explode forever
+        "3d6!!",
+        "3d6+2d1!",  # the second group's d1 would explode forever
     ]
 
     def test_parse_rejects(self):
@@ -83,6 +96,24 @@ class ParseMultiGroupTests(unittest.TestCase):
             Expression(
                 groups=(
                     Group(1, 1, 20, Keep("highest", 1)),
+                    Group(1, 2, 4, Keep("lowest", 1)),
+                )
+            ),
+        ),
+        (
+            "4d6!+2d4",
+            Expression(
+                groups=(
+                    Group(1, 4, 6, explode=True),
+                    Group(1, 2, 4),
+                )
+            ),
+        ),
+        (
+            "4d6!kh2+2d4kl1",
+            Expression(
+                groups=(
+                    Group(1, 4, 6, Keep("highest", 2), explode=True),
                     Group(1, 2, 4, Keep("lowest", 1)),
                 )
             ),

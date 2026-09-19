@@ -62,6 +62,38 @@ class RollerTests(unittest.TestCase):
         result = roll(spec, rng=rng)
         self.assertEqual(result.kept, result.rolls)
 
+    def test_exploding_die_adds_the_extra_roll(self):
+        # the first die rolls max (6) and explodes into a 4; the second
+        # die rolls a plain 2 and stops
+        rng = _FixedRng([6, 4, 2])
+        spec = Roll(count=2, sides=6, explode=True)
+        result = roll(spec, rng=rng)
+        self.assertEqual(result.rolls, (10, 2))
+        self.assertEqual(result.total, 12)
+
+    def test_exploding_die_can_chain_multiple_times(self):
+        # 6, 6, 6, 3 -- three max rolls in a row before finally settling
+        rng = _FixedRng([6, 6, 6, 3])
+        spec = Roll(count=1, sides=6, explode=True)
+        result = roll(spec, rng=rng)
+        self.assertEqual(result.rolls, (21,))
+
+    def test_non_exploding_die_never_rerolls_a_max_value(self):
+        rng = _FixedRng([6, 6])
+        spec = Roll(count=2, sides=6)
+        result = roll(spec, rng=rng)
+        self.assertEqual(result.rolls, (6, 6))
+
+    def test_exploding_interacts_with_keep_highest(self):
+        # die 1 rolls 6 and explodes into 5 (total 11); die 2 rolls a
+        # plain 2 -- keep-highest-1 should keep the exploded die
+        rng = _FixedRng([6, 5, 2])
+        spec = Roll(count=2, sides=6, keep=Keep("highest", 1), explode=True)
+        result = roll(spec, rng=rng)
+        self.assertEqual(result.rolls, (11, 2))
+        self.assertEqual(result.kept, (11,))
+        self.assertEqual(result.total, 11)
+
 
 class ExpressionRollerTests(unittest.TestCase):
     def test_multi_group_totals_are_summed_across_groups(self):
@@ -92,6 +124,20 @@ class ExpressionRollerTests(unittest.TestCase):
         self.assertEqual(result.groups[0].kept, (5, 5))
         self.assertEqual(result.groups[1].kept, (3, 4))
         self.assertEqual(result.total, 10 + 7)
+
+    def test_exploding_group_within_an_expression(self):
+        # first group: one d6 rolls 6 and explodes into 2 (total 8);
+        # second group: a plain 2d4 rolling 1, 3
+        rng = _FixedRng([6, 2, 1, 3])
+        spec = Expression(
+            groups=(
+                Group(1, 1, 6, explode=True),
+                Group(1, 2, 4),
+            )
+        )
+        result = roll(spec, rng=rng)
+        self.assertEqual(result.groups[0].rolls, (8,))
+        self.assertEqual(result.total, 8 + 4)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,9 @@ _DiceSpec = Union[str, Roll, Expression]
 class RollResult:
     """The outcome of rolling a Roll: every die rolled, the dice that were
     actually kept (after any keep-highest/keep-lowest filtering), and the
-    final total including the modifier.
+    final total including the modifier. For an exploding die, its entry
+    in `rolls` is the sum of that die and everything it exploded into,
+    rather than a single value capped at `sides`.
     """
 
     rolls: Tuple[int, ...]
@@ -60,10 +62,18 @@ def roll(
     return _roll_single(spec, rng)
 
 
+def _roll_one_die(sides: int, explode: bool, rng) -> int:
+    total = value = rng.randint(1, sides)
+    while explode and value == sides:
+        value = rng.randint(1, sides)
+        total += value
+    return total
+
+
 def _roll_dice(
-    count: int, sides: int, keep: Optional[Keep], rng
+    count: int, sides: int, keep: Optional[Keep], explode: bool, rng
 ) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
-    rolls = tuple(rng.randint(1, sides) for _ in range(count))
+    rolls = tuple(_roll_one_die(sides, explode, rng) for _ in range(count))
 
     if keep is None:
         return rolls, rolls
@@ -79,13 +89,15 @@ def _roll_dice(
 
 
 def _roll_single(spec: Roll, rng) -> RollResult:
-    rolls, kept = _roll_dice(spec.count, spec.sides, spec.keep, rng)
+    rolls, kept = _roll_dice(spec.count, spec.sides, spec.keep, spec.explode, rng)
     total = sum(kept) + spec.modifier
     return RollResult(rolls=rolls, kept=kept, modifier=spec.modifier, total=total)
 
 
 def _roll_group(group: Group, rng) -> GroupResult:
-    rolls, kept = _roll_dice(group.count, group.sides, group.keep, rng)
+    rolls, kept = _roll_dice(
+        group.count, group.sides, group.keep, group.explode, rng
+    )
     return GroupResult(sign=group.sign, rolls=rolls, kept=kept)
 
 

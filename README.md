@@ -62,11 +62,19 @@ to match.
 
 - `NdX` — roll N dice with X sides (`N` defaults to 1: `d20` == `1d20`)
 - `d%` — percentile die, equivalent to `d100`
+- `NdX!` — exploding dice: any die that rolls its max value (X) is
+  rolled again, and the new roll is added to it; this repeats as long
+  as the die keeps coming up max, so a single die's entry in `rolls`
+  can be greater than X
 - `NdXkhK` / `NdXklK` — keep the highest/lowest K of the N dice rolled
 - a trailing `+M` or `-M` modifier, added after any keep filtering
 - multiple dice groups joined by `+`/`-`, e.g. `3d6+2d4`, each with its
-  own optional keep filter (`1d20kh1+2d4kl1`); a `-` before a group
-  subtracts that group's kept total rather than negating each die
+  own optional exploding marker and keep filter (`1d20kh1+2d4kl1`,
+  `4d6!kh3`); a `-` before a group subtracts that group's kept total
+  rather than negating each die
+
+`d1!` is rejected, since a one-sided die always rolls its max and would
+explode forever.
 
 Invalid notation (empty strings, zero-sided dice, asking to keep more
 dice than were rolled, a bare number with no dice group, and so on)
@@ -74,5 +82,5 @@ raises `dicenotation.ParseError`.
 
 ## Status
 
-Early skeleton. No exploding dice yet. See the test suite for the exact
-set of notation currently accepted and rejected.
+Early skeleton. See the test suite for the exact set of notation
+currently accepted and rejected.

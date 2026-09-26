@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
 # count is optional (defaults to 1, as in "d20"). sides is digits or "%"
-# for d100. The exploding marker "!", keep-highest/keep-lowest, and the
-# trailing modifier are all optional. Whitespace is tolerated anywhere a
-# human might type it.
+# for d100. The exploding marker "!", keep-highest/keep-lowest (or the
+# "adv"/"dis" shorthand for it), and the trailing modifier are all
+# optional. Whitespace is tolerated anywhere a human might type it.
 _PATTERN = re.compile(
     r"""
     ^\s*
@@ -17,7 +17,11 @@ _PATTERN = re.compile(
     \s*
     (?P<explode>!)?
     \s*
-    (?:(?P<keep_mode>k[hl])(?P<keep_count>\d+))?
+    (?:
+        (?P<keep_mode>k[hl])(?P<keep_count>\d+)
+        |
+        (?P<adv_dis>adv|dis)
+    )?
     \s*
     (?P<modifier>[+-]\s*\d+)?
     \s*$
@@ -41,7 +45,11 @@ _TERM_PATTERN = re.compile(
         (?P<sides>\d+|%)
         \s*
         (?P<explode>!)?
-        (?:\s*(?P<keep_mode>k[hl])(?P<keep_count>\d+))?
+        (?:
+            \s*(?P<keep_mode>k[hl])(?P<keep_count>\d+)
+            |
+            \s*(?P<adv_dis>adv|dis)
+        )?
         |
         (?P<constant>\d+)
     )
@@ -102,8 +110,10 @@ def parse(text: str) -> Union[Roll, Expression]:
     Examples: "d20", "3d6", "3d6+2", "4d6kh3" (roll 4d6, keep the
     highest 3), "d%" (percentile die, equivalent to d100), "4d6!" (each
     die that rolls its max value is rolled again and the results added
-    together), "3d6+2d4" (multiple dice groups, returned as an
-    Expression rather than a Roll).
+    together), "d20adv" (roll d20 twice, keep the higher -- shorthand
+    for "2d20kh1"), "d20dis" (shorthand for "2d20kl1"), "3d6+2d4"
+    (multiple dice groups, returned as an Expression rather than a
+    Roll).
     """
     match = _PATTERN.match(text)
     if match:
@@ -112,16 +122,13 @@ def parse(text: str) -> Union[Roll, Expression]:
 
 
 def _build_roll(match: "re.Match") -> Roll:
-    count = int(match["count"]) if match["count"] else 1
-    if count < 1:
-        raise ParseError("dice count must be at least 1")
+    count, keep = _resolve_count_and_keep(match)
 
     sides = 100 if match["sides"] == "%" else int(match["sides"])
     if sides < 1:
         raise ParseError("a die must have at least 1 side")
 
     explode = _build_explode(match, sides)
-    keep = _build_keep(match, count)
 
     modifier_text = match["modifier"]
     modifier = int(modifier_text.replace(" ", "")) if modifier_text else 0
@@ -149,6 +156,30 @@ def _build_keep(match: "re.Match", count: int) -> Optional[Keep]:
     return Keep(mode, keep_count)
 
 
+def _resolve_count_and_keep(match: "re.Match") -> Tuple[int, Optional[Keep]]:
+    """Work out the actual dice count and keep filter for a match, folding
+    in the "adv"/"dis" shorthand: each is a single die rolled twice, with
+    the better ("adv") or worse ("dis") of the two kept. It is meaningless
+    with an explicit count other than 1 (roll "3d20adv" would have to mean
+    either 3 dice or 2 -- reject it rather than guess).
+    """
+    count_text = match["count"]
+    count = int(count_text) if count_text else 1
+    if count < 1:
+        raise ParseError("dice count must be at least 1")
+
+    if match["adv_dis"]:
+        if count_text and count != 1:
+            raise ParseError(
+                "advantage/disadvantage rolls a single die twice; "
+                f"an explicit count of {count} does not make sense with it"
+            )
+        mode = "highest" if match["adv_dis"].lower() == "adv" else "lowest"
+        return 2, Keep(mode, 1)
+
+    return count, _build_keep(match, count)
+
+
 def _parse_expression(text: str) -> Expression:
     groups = []
     modifier = 0
@@ -165,14 +196,11 @@ def _parse_expression(text: str) -> Expression:
         if match["constant"] is not None:
             modifier += sign * int(match["constant"])
         else:
-            count = int(match["count"]) if match["count"] else 1
-            if count < 1:
-                raise ParseError("dice count must be at least 1")
+            count, keep = _resolve_count_and_keep(match)
             sides = 100 if match["sides"] == "%" else int(match["sides"])
             if sides < 1:
                 raise ParseError("a die must have at least 1 side")
             explode = _build_explode(match, sides)
-            keep = _build_keep(match, count)
             groups.append(
                 Group(sign=sign, count=count, sides=sides, keep=keep, explode=explode)
             )

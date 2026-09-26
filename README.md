@@ -39,8 +39,13 @@ import random
 from dicenotation import roll
 
 rng = random.Random(1234)
-result = roll("2d20kh1", rng=rng)  # advantage roll
+result = roll("d20adv", rng=rng)  # advantage roll
 ```
+
+`adv` and `dis` are shorthand for the common "roll a die twice, keep the
+better (or worse) result" pattern: `d20adv` is exactly `2d20kh1`, and
+`d20dis` is exactly `2d20kl1`. They only make sense for a single die, so
+an explicit count other than 1 (`3d20adv`) is rejected as ambiguous.
 
 Multiple dice groups can be combined in one expression, e.g. a damage
 roll with a bonus die:
@@ -67,6 +72,9 @@ to match.
   as the die keeps coming up max, so a single die's entry in `rolls`
   can be greater than X
 - `NdXkhK` / `NdXklK` — keep the highest/lowest K of the N dice rolled
+- `dXadv` / `dXdis` — advantage/disadvantage shorthand: roll the die
+  twice and keep the higher (`adv`) or lower (`dis`) result; equivalent
+  to `2dXkh1` / `2dXkl1`
 - a trailing `+M` or `-M` modifier, added after any keep filtering
 - multiple dice groups joined by `+`/`-`, e.g. `3d6+2d4`, each with its
   own optional exploding marker and keep filter (`1d20kh1+2d4kl1`,

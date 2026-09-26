@@ -29,6 +29,15 @@ class ParseValidTests(unittest.TestCase):
             "4d6! kh3 +1",
             Roll(count=4, sides=6, modifier=1, keep=Keep("highest", 3), explode=True),
         ),
+        ("d20adv", Roll(count=2, sides=20, keep=Keep("highest", 1))),
+        ("d20dis", Roll(count=2, sides=20, keep=Keep("lowest", 1))),
+        ("1d20adv", Roll(count=2, sides=20, keep=Keep("highest", 1))),
+        ("D20ADV", Roll(count=2, sides=20, keep=Keep("highest", 1))),
+        ("d20 adv + 5", Roll(count=2, sides=20, modifier=5, keep=Keep("highest", 1))),
+        (
+            "d6!adv",
+            Roll(count=2, sides=6, keep=Keep("highest", 1), explode=True),
+        ),
     ]
 
     def test_parse(self):
@@ -63,6 +72,11 @@ class ParseInvalidTests(unittest.TestCase):
         "d1!",  # a one-sided die would explode forever
         "3d6!!",
         "3d6+2d1!",  # the second group's d1 would explode forever
+        "3d20adv",  # ambiguous: 3 dice, or 2 with advantage?
+        "3d20dis",
+        "d20advantage",  # not the recognized shorthand
+        "d20kh1adv",  # can't combine explicit keep with advantage
+        "d20advkh1",
     ]
 
     def test_parse_rejects(self):
@@ -114,6 +128,15 @@ class ParseMultiGroupTests(unittest.TestCase):
             Expression(
                 groups=(
                     Group(1, 4, 6, Keep("highest", 2), explode=True),
+                    Group(1, 2, 4, Keep("lowest", 1)),
+                )
+            ),
+        ),
+        (
+            "d20adv+d4dis",
+            Expression(
+                groups=(
+                    Group(1, 2, 20, Keep("highest", 1)),
                     Group(1, 2, 4, Keep("lowest", 1)),
                 )
             ),
